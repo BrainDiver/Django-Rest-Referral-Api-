@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Referral System : Login
+{% endblock %}
+
+{% block content %}
+    <div class="container p-4 border mt-sm-5" style="max-width: 450px">
+        <h1 class="display-6 text-center pb-4">Referral System</h1>
+        <form action="{% url 'sms_verification' %}" method="post" class="row g-3">
+            {% csrf_token %}
+            <div class="col-12">
+                <label for="input-code" class="form-label">Введите код из смс </label>
+                <input type="text" class="form-control" id="input-code" name="sms_code" value="0000" placeholder="XXXX">
+            </div>
+            <div class="col-12 mt-4 text-center ">
+                <button type="submit" class="btn btn-primary btn-lg px-4 w-100 ">Подтвердить</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
