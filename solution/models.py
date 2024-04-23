@@ -1,4 +1,4 @@
-from django.db import models
+# from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 from django.contrib.auth.models import AbstractUser
 
@@ -41,7 +41,10 @@ class User(AbstractUser):
         return user
 
     def to_as_e164(self, number):
-        number = number.as_e164
+        if not isinstance(number, str):
+            number = number.as_e164
+        else:
+            pass
         return number
 
     @property
