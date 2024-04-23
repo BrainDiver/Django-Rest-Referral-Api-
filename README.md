@@ -42,9 +42,9 @@
 ⪢ `Ответ выглядит подобно этому.`
 ```json
 {
-    'message': 'Authenticated',
-    'auth_token': "2bac0d412823608fcf73081749c13351e5e5246c",
-    'profile_url': 'http://...',
+    "message": "Authenticated",
+    "auth_token": "2bac0d412823608fcf73081749c13351e5e5246c",
+    "profile_url": "http://...",
 }
 ```
 ## Profiles API
