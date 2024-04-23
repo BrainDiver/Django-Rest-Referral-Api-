@@ -257,13 +257,11 @@ class ProfileRetrieveAPIView(generics.GenericAPIView):
                     except:
                         return Response(data = {"profile": "no such profile"})
         else:
-            if serializer.is_valid(raise_exception=True):
-                try:
-                    profile = User.objects.get(phone_number=str(request.user))
-                    profile.referal_user = User.objects.get(
-                        referal_code=serializer.data.get("referal_user")
-                    )
-                    profile.save()
-                except:
-                    pass
-                return redirect(reverse('profile'))
+            referal_user = request.POST.get('referal_user')
+            try:
+                profile = User.objects.get(phone_number = str(request.user))
+                profile.referal_user = User.objects.get(referal_code = referal_user)
+                profile.save
+            except:
+                pass
+            return redirect(reverse('profile'))
