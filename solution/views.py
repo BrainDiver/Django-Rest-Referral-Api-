@@ -17,36 +17,46 @@ from datetime import datetime
 from datetime import timedelta
 
 from .models import User
-from .serializers import Login_Serializer, SMS_Verification_Serializer, Profile_Serializer
+from .serializers import (
+    Login_Serializer,
+    SMS_Verification_Serializer,
+    Profile_Serializer,
+)
 
 # Create your views here.
 class LoginAPIView(generics.GenericAPIView):
     serializer_class = Login_Serializer
-    template_name = 'solution/login.html'
-
+    template_name = "solution/login.html"
 
     def get(self, request):
-        type = request.headers.get('application')
-        if type == 'application':
+        type = request.headers.get("application")
+        if type == "application":
             serializer = self.serializer_class()
             return Response(serializer.data)
         else:
             return render(request, self.template_name)
 
-
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data = request.data, context = {'request': request})
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         data = {}
-        content_type = request.headers.get('content_type').split(';')[0]
-        if content_type == 'multipart/form-data' or content_type == 'application/json':
+        content_type = request.headers.get("content_type").split(";")[0]
+        if content_type == "multipart/form-data" or content_type == "application/json":
             if serializer.is_valid():
                 data = serializer.data
                 sms_token = self.get_sms_token(data)
-                request.session['sms_token'] = sms_token.decode('utf-8') # Временное решение. Если в следующем запросе не будет введен sms_token то программа возмет его с request.session
-                return Response( data = {
-                                          'sms_token': sms_token,
-                                          'url_to_confirm': request.build_absolute_uri('/') +'solution/sms_verification/',
-                                        }, status=status.HTTP_200_OK)
+                request.session["sms_token"] = sms_token.decode(
+                    "utf-8"
+                )  # Временное решение. Если в следующем запросе не будет введен sms_token то программа возмет его с request.session
+                return Response(
+                    data={
+                        "sms_token": sms_token,
+                        "url_to_confirm": request.build_absolute_uri("/")
+                        + "solution/sms_verification/",
+                    },
+                    status=status.HTTP_200_OK,
+                )
             else:
                 data = serializer.errors
                 return Response(data)
@@ -54,99 +64,111 @@ class LoginAPIView(generics.GenericAPIView):
             if serializer.is_valid():
                 data = serializer.data
                 sms_token = self.get_sms_token(data)
-                request.session['sms_token'] = sms_token.decode('utf-8')
-                return redirect(reverse('sms_verification'))
+                request.session["sms_token"] = sms_token.decode("utf-8")
+                return redirect(reverse("sms_verification"))
             else:
-                return render(request, self.template_name, context = {})
-
+                return render(request, self.template_name, context={})
 
     @staticmethod
     def get_sms_token(data):
         time.sleep(2)  # Задержка
-        sms_code = '0000' # Код
+        sms_code = "0000"  # Код
 
         payload = {
-            'credentials': dict(data),
-            'sent_sms_code': sms_code,
+            "credentials": dict(data),
+            "sent_sms_code": sms_code,
         }
 
-        token = jwt.encode(payload, '')
-        encrypted_token = jwe.encrypt(token.encode("utf-8"), key = settings.JWE_SECRET, encryption = 'A256CBC-HS512')
+        token = jwt.encode(payload, "")
+        encrypted_token = jwe.encrypt(
+            token.encode("utf-8"), key=settings.JWE_SECRET, encryption="A256CBC-HS512"
+        )
         return encrypted_token
 
 
 class SMS_VerificationAPIView(generics.GenericAPIView, MiddlewareMixin, BaseBackend):
     serializer_class = SMS_Verification_Serializer
-#    renderer_classes = [TemplateHTMLRenderer]
-    template_name = 'solution/sms_verification.html'
-
+    #    renderer_classes = [TemplateHTMLRenderer]
+    template_name = "solution/sms_verification.html"
 
     def get(self, request):
-        type = request.headers.get('application')
-        if type == 'application':
+        type = request.headers.get("application")
+        if type == "application":
             serializer = self.serializer_class()
             return Response(serializer.data)
         else:
             return render(request, self.template_name)
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data = request.data, context = {'session': request.session.get('sms_token')} )
+        serializer = self.serializer_class(
+            data=request.data, context={"session": request.session.get("sms_token")}
+        )
         data = {}
-        content_type = request.headers.get('content_type').split(';')[0]
+        content_type = request.headers.get("content_type").split(";")[0]
 
-        if content_type == 'multipart/form-data' or content_type == 'application/json':
+        if content_type == "multipart/form-data" or content_type == "application/json":
 
-            if serializer.is_valid(raise_exception = True):
-                user_sms_code = serializer.data.get('sms_code')
-                sms_token = serializer.data.get('sms_token') or request.session.get('sms_token')
+            if serializer.is_valid(raise_exception=True):
+                user_sms_code = serializer.data.get("sms_code")
+                sms_token = serializer.data.get("sms_token") or request.session.get(
+                    "sms_token"
+                )
                 token = self.decrypt_token(sms_token)
-                payload = self.decode_token(token, key='')
-                if payload.get('sent_sms_code') != user_sms_code:
-                    raise HttpException('Invalid SMS code', status_code=status.HTTP_401_UNAUTHORIZED)
+                payload = self.decode_token(token, key="")
+                if payload.get("sent_sms_code") != user_sms_code:
+                    raise HttpException(
+                        "Invalid SMS code", status_code=status.HTTP_401_UNAUTHORIZED
+                    )
                 else:
-                    user = User.get_or_create_user(payload.get('credentials'))
+                    user = User.get_or_create_user(payload.get("credentials"))
 
                     try:
-                        token = Token.objects.create(user = user)
+                        token = Token.objects.create(user=user)
                     except:
-                        token = Token.objects.get(user_id= user)
+                        token = Token.objects.get(user_id=user)
                     user = self.authenticate(request, token)
-                    return Response({
-                                     'message': 'Authenticated',
-                                     'auth_token': token.key,
-                                     'profile_url':  request.build_absolute_uri('/') +'solution/profile/',
-                                   })
+                    return Response(
+                        {
+                            "message": "Authenticated",
+                            "auth_token": token.key,
+                            "profile_url": request.build_absolute_uri("/")
+                            + "solution/profile/",
+                        }
+                    )
             else:
                 data = serializer.errors
                 return Response(data)
 
         else:
 
-            if serializer.is_valid(raise_exception = True):
-                user_sms_code = serializer.data.get('sms_code')
-                sms_token = serializer.data.get('sms_token') or request.session.get('sms_token')
+            if serializer.is_valid(raise_exception=True):
+                user_sms_code = serializer.data.get("sms_code")
+                sms_token = serializer.data.get("sms_token") or request.session.get(
+                    "sms_token"
+                )
                 token = self.decrypt_token(sms_token)
-                payload = self.decode_token(token, key='')
-                if payload.get('sent_sms_code') != user_sms_code:
-                    raise HttpException('Invalid SMS code', status_code=status.HTTP_401_UNAUTHORIZED)
+                payload = self.decode_token(token, key="")
+                if payload.get("sent_sms_code") != user_sms_code:
+                    raise HttpException(
+                        "Invalid SMS code", status_code=status.HTTP_401_UNAUTHORIZED
+                    )
                 else:
-                    user = User.get_or_create_user(payload.get('credentials'))
+                    user = User.get_or_create_user(payload.get("credentials"))
                     try:
-                        token = Token.objects.create(user = user)
+                        token = Token.objects.create(user=user)
                     except:
-                        token = Token.objects.get(user_id = user)
+                        token = Token.objects.get(user_id=user)
 
                 user = self.authenticate(request, token)
-                return redirect('profile')
+                return redirect("profile")
             else:
-                return render(request, template_name, context = {})
-
+                return render(request, template_name, context={})
 
     def authenticate(self, request, token):
         user = None
 
         try:
-            user = Token.objects.get(key = token.key).user
+            user = Token.objects.get(key=token.key).user
         except:
             pass
         if user != None:
@@ -160,63 +182,88 @@ class SMS_VerificationAPIView(generics.GenericAPIView, MiddlewareMixin, BaseBack
         try:
             return jwe.decrypt(token, settings.JWE_SECRET).decode()
         except (jose.exceptions.JWEError, jose.exceptions.JWEParseError):
-            raise HttpException('Invalid token')
-
+            raise HttpException("Invalid token")
 
     @staticmethod
     def decode_token(token, *args, **kwargs) -> dict:
         try:
             return jwt.decode(token, *args, **kwargs)
         except jose.exceptions.JWTError:
-            raise HttpException('Invalid token')
+            raise HttpException("Invalid token")
 
 
 class ProfileRetrieveAPIView(generics.GenericAPIView):
     serializer_class = Profile_Serializer
-    #renderer_classes = [TemplateHTMLRenderer]
-    template_name = 'solution/profile.html'
+    # renderer_classes = [TemplateHTMLRenderer]
+    template_name = "solution/profile.html"
 
     def get(self, request, **kwargs):
         serializer = self.serializer_class
-        type = request.headers.get('application')
-        if type == 'application':
+        type = request.headers.get("application")
+        if type == "application":
             try:
-                profile = User.objects.get(phone_number = str(request.user))
-                data = { 'profile': serializer(profile).data }
+                profile = User.objects.get(phone_number=str(request.user))
+                data = {"profile": serializer(profile).data}
                 return Response(data)
             except Exception as error:
-                profile = "Такого профиля не существует" 
-                data = { 'profile': profile }
+                profile = "Такого профиля не существует"
+                data = {"profile": profile}
                 return Response(data)
         else:
-            return render(request, self.template_name, context = { 'profile': request.user })
+            return render(
+                request, self.template_name, context={"profile": request.user}
+            )
 
     def post(self, request, **kwargs):
-        serializer = self.serializer_class(data = request.data, context = {'request':request})
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         data = {}
-        content_type = request.headers.get('content_type').split(';')[0]
-        if content_type == 'multipart/form-data' or content_type == 'application/json':
+        content_type = request.headers.get("content_type").split(";")[0]
+        if content_type == "multipart/form-data" or content_type == "application/json":
 
-            if serializer.is_valid(raise_exception = True):
-                profile = User.objects.get(phone_number = str(request.user))
-                profile.referal_user = User.objects.get(referal_code = serializer.data.get('referal_user'))
-                profile.save()
-                return Response( data = {'profile':{
-                                                    'phone_number': profile.phone_number.as_e164,
-                                                    'referal_code': profile.referal_code,
-                                                    'referal_user': profile.referal_user.username,
-                                                    'invited_users': profile.get_invited_users,
-                                                   }
-                                        }, status=status.HTTP_200_OK )
-            else:
-                data = serializer.errors
-                return Response(data)
-
+            if serializer.is_valid(raise_exception=True):
+                try:
+                    profile = User.objects.get(phone_number=str(request.user))
+                    profile.referal_user = User.objects.get(
+                        referal_code=serializer.data.get("referal_user")
+                    )
+                    profile.save()
+                    return Response(
+                        data={
+                            "profile": {
+                                "phone_number": profile.phone_number.as_e164,
+                                "referal_code": profile.referal_code,
+                                "referal_user": profile.referal_user.username,
+                                "invited_users": profile.get_invited_users,
+                            }
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except:
+                    try:
+                        profile = User.objects.get(phone_number=str(request.user))
+                        return Response(
+                            data={
+                                "profile": {
+                                    "phone_number": profile.phone_number.as_e164,
+                                    "referal_code": profile.referal_code,
+                                    "referal_user": profile.referal_user.username,
+                                    "invited_users": profile.get_invited_users,
+                                }
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+                    except:
+                        return Response(data = {"profile": "no such profile"})
         else:
-            if serializer.is_valid(raise_exception = True):
-                profile = User.objects.get(phone_number = str(request.user))
-                profile.referal_user = User.objects.get(referal_code = serializer.data.get('referal_user'))
-                profile.save()
-
-            return redirect(reverse('profile'))
-
+            if serializer.is_valid(raise_exception=True):
+                try:
+                    profile = User.objects.get(phone_number=str(request.user))
+                    profile.referal_user = User.objects.get(
+                        referal_code=serializer.data.get("referal_user")
+                    )
+                    profile.save()
+                except:
+                    pass
+                return redirect(reverse('profile'))
